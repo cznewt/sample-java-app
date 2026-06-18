@@ -206,6 +206,10 @@ app's own HTTP handlers. The container / runtime / network controls behind this 
 Bring-up is a single `make all` (build → sideload images into cri-o → operators → Kafka/Postgres →
 apps → dashboards/alerts); `make verify` asserts the pipeline plus all four telemetry pillars.
 
+Local development needs no cluster — **`docker compose up --build`** (root `docker-compose.yml` +
+`Dockerfile`) runs Kafka (KRaft) + PostgreSQL + the three services, with the `testCommand` topic
+pre-created at 32 partitions. Front on `:8080`, Reader on `:8084`, Swagger + `/health` on each.
+
 > Hardening backlog: app-level authn/authz on the REST endpoints, client-cert Postgres mTLS,
 > multi-broker Kafka / HA Postgres on a multi-node cluster, and external-secret management for the
 > Grafana credentials.
