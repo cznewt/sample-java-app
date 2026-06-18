@@ -82,8 +82,8 @@ automatically. Per-service config lives under `front:`/`back:`/`reader:`; `globa
 * **JVM mixin** — the **grafana `jvm-observ-lib`** jsonnet library is rendered (metric source
   `java_micrometer`, selector `job=~"sre-.*"`) into a 30-panel **JVM** dashboard plus JVM alert rules.
 * **monitor-tools instance** — a small Helm release whose post-install/upgrade **hook Job** pushes
-  the dashboards into a **single Grafana folder for the assignment** ("SRE Challenge — Boerse"),
-  split into nested **Kafka** / **PostgreSQL** / **Java apps** subfolders, and loads the alert rule
+  the dashboards into a **single Grafana folder**, split into nested **Kafka** / **PostgreSQL** /
+  **Java apps** subfolders, and loads the alert rule
   groups into the **Mimir ruler** (→ Alertmanager). Idempotent, hardened non-root, no external deps.
 * **Alerts** — 11 rules across app / JVM / Kafka / Postgres (see **Alerting** below).
 
@@ -150,15 +150,6 @@ for the apps, kafka-exporter + broker JMX for Kafka, the CNPG metrics endpoint f
 * **Resources**: `kafka-cluster` (message-broker, mTLS) and `postgres-db` (database, TLS).
 * **Relations** tie it together — Front `dependsOn` Kafka; Back `dependsOn` Kafka + Postgres; Reader
   `dependsOn` Postgres; all `partOf` the System — so Backstage renders the full dependency graph.
-
----
-
-## Platform fix (bonus)
-
-The shared `alloy-receiver` OTLP gateway routed **all** signals to Tempo, so metrics/logs were
-dropped (`rpc error: Unimplemented … MetricsService`). It was fixed to route metrics→Mimir,
-logs→Loki, traces→Tempo; apps then use it as the blessed path and spans gain `k8s.*` resource
-attributes.
 
 ---
 
