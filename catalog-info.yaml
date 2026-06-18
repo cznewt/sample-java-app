@@ -1,0 +1,185 @@
+# Backstage Software Catalog descriptor for the sample java app.
+# Register in Backstage via: Create > Register existing component > this file's URL.
+# Entities: Domain, System, 3 Components, 2 APIs, 2 Resources, Group.
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: platform-observability
+  description: Workloads used to exercise and demonstrate the monlab LGTM+ observability platform.
+spec:
+  owner: team-sre
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: sample-java-app
+  title: Sample Java App (Front / Back / Reader)
+  description: >-
+    Event-driven demo: Front (REST) -> Kafka (testCommand) -> Back (consumer) ->
+    PostgreSQL -> Reader (REST). Fully instrumented for metrics, logs, traces and
+    continuous profiling, deployed with a composite Helm chart and mTLS.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/part-of=sre-challenge
+    backstage.io/source-location: url:https://github.com/cznewt/sample-java-app/tree/main/
+  links:
+    - url: https://grafana.monlab.newt.cz
+      title: Grafana (dashboards / Explore)
+      icon: dashboard
+spec:
+  owner: team-sre
+  domain: platform-observability
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sre-front
+  title: Front (ingest → Kafka producer)
+  description: REST endpoint that ingests commands and publishes them to the Kafka testCommand topic (mTLS).
+  tags: [spring-boot, kotlin, kafka-producer, jvm]
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/component=sre-front
+    backstage.io/source-location: url:https://github.com/cznewt/sample-java-app/tree/main/app/front/
+  links:
+    - url: https://sre-front.monlab.newt.cz/swagger-ui.html
+      title: Swagger UI
+      icon: docs
+spec:
+  type: service
+  lifecycle: experimental
+  owner: team-sre
+  system: sample-java-app
+  providesApis: [sre-front-api]
+  dependsOn: [resource:kafka-cluster]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sre-back
+  title: Back (Kafka consumer → Postgres writer)
+  description: >-
+    Consumes testCommand (mTLS), performs the CPU load calculation and persists
+    results to PostgreSQL (TLS). Owns the JPA schema.
+  tags: [spring-boot, kotlin, kafka-consumer, postgresql, jvm]
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/component=sre-back
+    backstage.io/source-location: url:https://github.com/cznewt/sample-java-app/tree/main/app/back/
+spec:
+  type: service
+  lifecycle: experimental
+  owner: team-sre
+  system: sample-java-app
+  consumesApis: [sre-front-api]
+  dependsOn: [resource:kafka-cluster, resource:postgres-db]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sre-reader
+  title: Reader (Postgres → REST)
+  description: Paginated REST read API over the persisted test entities (TLS Postgres).
+  tags: [spring-boot, kotlin, postgresql, jvm]
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/component=sre-reader
+    backstage.io/source-location: url:https://github.com/cznewt/sample-java-app/tree/main/app/reader/
+  links:
+    - url: https://sre-reader.monlab.newt.cz/swagger-ui.html
+      title: Swagger UI
+      icon: docs
+spec:
+  type: service
+  lifecycle: experimental
+  owner: team-sre
+  system: sample-java-app
+  providesApis: [sre-reader-api]
+  dependsOn: [resource:postgres-db]
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: sre-front-api
+  title: Command Ingest API
+  description: Accepts commands and forwards them to Kafka.
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: team-sre
+  system: sample-java-app
+  definition: |
+    openapi: 3.0.3
+    info: { title: Front Command Ingest API, version: "0.1.0" }
+    paths:
+      /api/v1/command:
+        post:
+          summary: Post a test command (optionally generating CPU load)
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    message:   { type: string, nullable: true, example: "Hello world" }
+                    loadFront: { type: integer, minimum: 0, example: 100 }
+                    loadBack:  { type: integer, minimum: 0, example: 100 }
+          responses: { "200": { description: Accepted (processing is asynchronous) } }
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: sre-reader-api
+  title: Test Entity Read API
+  description: Paginated read access to persisted test entities.
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: team-sre
+  system: sample-java-app
+  definition: |
+    openapi: 3.0.3
+    info: { title: Reader API, version: "0.1.0" }
+    paths:
+      /api/v1/testEntity:
+        get:
+          summary: List persisted test entities (paged)
+          parameters:
+            - { name: page, in: query, schema: { type: integer, default: 0 } }
+            - { name: size, in: query, schema: { type: integer, default: 20 } }
+          responses: { "200": { description: A page of test entities } }
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: kafka-cluster
+  title: Kafka (Strimzi, KRaft, mTLS)
+  description: Single-broker KRaft Kafka, mTLS-only listener. Topic testCommand (32 partitions, RF 1).
+  tags: [kafka, strimzi, kraft, mtls]
+  annotations:
+    backstage.io/kubernetes-label-selector: strimzi.io/cluster=sre-kafka
+spec:
+  type: message-broker
+  owner: team-sre
+  system: sample-java-app
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: postgres-db
+  title: PostgreSQL (CloudNativePG, TLS)
+  description: PostgreSQL 16 cluster managed by CloudNativePG. Database "appdb".
+  tags: [postgresql, cloudnative-pg, tls]
+  annotations:
+    backstage.io/kubernetes-label-selector: cnpg.io/cluster=sre-postgres
+spec:
+  type: database
+  owner: team-sre
+  system: sample-java-app
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-sre
+  description: SRE / platform team that owns the workloads.
+spec:
+  type: team
+  children: []

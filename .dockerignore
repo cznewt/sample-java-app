@@ -1,0 +1,8 @@
+# Keep the build context small and never ship secrets / prior solutions
+_solution/
+.git/
+doc/
+**/build/
+**/.gradle/
+*.md
+.gitignore

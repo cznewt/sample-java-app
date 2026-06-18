@@ -1,0 +1,27 @@
+# VSCode
+.vscode
+.classpath
+.project
+.settings
+
+# User-specific stuff:
+.idea/
+
+## File-based project format:
+*.iws
+*.iml
+
+### Gradle template
+.gradle
+build/
+
+# Cluster credentials — never commit
+_solution/.kube/
+**/.kube/config
+*.kubeconfig
+
+# Vendored Helm subchart packages (re-created by `helm dependency build`)
+**/charts/*.tgz
+
+# Deployment solution workspace (kept out of the sample-java-app repo; see SOLUTION.md)
+_solution/

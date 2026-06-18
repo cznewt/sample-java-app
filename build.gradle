@@ -1,0 +1,78 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "io.spring.gradle:dependency-management-plugin:$springDependencyManagementVersion"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+        classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlinVersion"
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:$springBootVersion"
+    }
+}
+
+plugins {
+    id "org.jetbrains.kotlin.jvm" version "$kotlinVersion"
+}
+
+apply plugin: "idea"
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+sourceCompatibility = JavaVersion.VERSION_21
+targetCompatibility = JavaVersion.VERSION_21
+version = "0.1.0"
+ext["kotlin.version"] = kotlinVersion
+
+subprojects {
+    group = "ch.demo"
+    version = rootProject.version
+
+    buildscript {
+        repositories {
+            mavenLocal()
+            mavenCentral()
+        }
+    }
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+
+    ext {
+        sourceEncoding = 'UTF-8'
+    }
+
+    apply plugin: "java"
+    apply plugin: "kotlin"
+
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    kotlin {
+        jvmToolchain(21)
+    }
+    dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
+
+        testImplementation('org.junit.jupiter:junit-jupiter:5.7.0')
+        testImplementation "org.assertj:assertj-core:3.19.0"
+    }
+
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events "passed", "skipped", "failed"
+//        showStandardStreams = true
+        }
+        systemProperties = [
+                'junit.jupiter.execution.parallel.enabled'             : 'true',
+                'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
+                'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent'
+        ]
+        maxHeapSize = "256m"
+    }
+}
