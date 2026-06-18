@@ -151,6 +151,10 @@ for the apps, kafka-exporter + broker JMX for Kafka, the CNPG metrics endpoint f
 * **Relations** tie it together — Front `dependsOn` Kafka; Back `dependsOn` Kafka + Postgres; Reader
   `dependsOn` Postgres; all `partOf` the System — so Backstage renders the full dependency graph.
 
+The catalog graph as rendered in Backstage:
+
+![Backstage catalog graph for sample-java-app](doc/img/backstage-catalog.png)
+
 ---
 
 ## Security — protecting the APIs
