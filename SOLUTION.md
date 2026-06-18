@@ -85,16 +85,71 @@ automatically. Per-service config lives under `front:`/`back:`/`reader:`; `globa
   the dashboards into a **single Grafana folder for the assignment** ("SRE Challenge — Boerse"),
   split into nested **Kafka** / **PostgreSQL** / **Java apps** subfolders, and loads the alert rule
   groups into the **Mimir ruler** (→ Alertmanager). Idempotent, hardened non-root, no external deps.
-* **Alerts** — app (down / 5xx / p99 latency), JVM (heap / deadlock), Kafka (consumer lag / no
-  brokers / exporter down), Postgres (cluster down / connections).
+* **Alerts** — 11 rules across app / JVM / Kafka / Postgres (see **Alerting** below).
 
 ---
 
-## Backstage catalog
+## Alerting
 
-`catalog-info.yaml` (repo root) defines a **System** grouping the three **Components** (Front/Back/
-Reader), the two **APIs** (ingest / read) and two **Resources** (Kafka, Postgres), with k8s/Grafana
-annotations and Swagger links.
+11 Prometheus rules in 4 groups are loaded into the **Mimir ruler** (tenant `anonymous`, namespace
+`sre-challenge`) by the monitor-tools Job; Mimir evaluates them and routes firing alerts to the
+shared **Alertmanager**. Coverage is RED (rate / errors / duration) for the apps and availability /
+saturation for the infrastructure — warnings are tuned to fire *before* the matching critical.
+
+| Component | Alert | Severity | Fires when |
+|---|---|---|---|
+| Apps (front/back/reader) | `SreAppDown`              | critical | `up==0` for the service, 2m |
+|                          | `SreAppHighErrorRate`     | warning  | 5xx ratio > 5% over 5m |
+|                          | `SreAppHighLatencyP99`    | warning  | HTTP p99 > 1s for 10m |
+| JVM (per app, `jvm-observ-lib` mixin) | `JvmMemoryFillingUp`    | warning  | heap > 80% for 5m |
+|                          | `JvmThreadsDeadlocked`    | critical | deadlocked threads, 2m |
+| Kafka                    | `KafkaConsumerLagHigh`    | warning  | `testCommand` consumer lag > 1000 for 5m (Back behind) |
+|                          | `KafkaExporterDown`       | warning  | exporter `up==0`, 5m (lag blind spot) |
+|                          | `KafkaNoBrokers`          | critical | `kafka_brokers < 1`, 2m |
+| Postgres                 | `PostgresClusterDown`     | critical | `cnpg_collector_up==0`, 2m |
+|                          | `PostgresTooManyConnections` | warning | backends / `max_connections` > 80% for 5m |
+
+**4 critical** (hard-down / deadlock) + **7 warning** (degradation). Each alert maps to a panel in the
+Grafana dashboards; the app/Kafka/Postgres rule sources ship with the deployment, the two JVM rules
+are rendered from the mixin.
+
+---
+
+## Monitoring per component
+
+Every component has its own board(s) and alert(s). The three apps share the **job-templated** JVM
+mixin dashboard and the app/JVM alert groups (each rule evaluates per `job`, so Front/Back/Reader are
+distinct series); Kafka and Postgres use the upstream Strimzi/CNPG boards. All dashboards are pinned
+to the Mimir datasource and pushed into the nested assignment folders.
+
+| Component | Boards (folder) | Alerts |
+|---|---|---|
+| **Front** (`sre-front`)  | SRE JVM overview · *Java apps* | SreAppDown, SreAppHighErrorRate, SreAppHighLatencyP99, JvmMemoryFillingUp, JvmThreadsDeadlocked |
+| **Back** (`sre-back`)    | SRE JVM overview · *Java apps* | SreAppDown, JvmMemoryFillingUp, JvmThreadsDeadlocked — plus **KafkaConsumerLagHigh** (its consumer health) |
+| **Reader** (`sre-reader`)| SRE JVM overview · *Java apps* | SreAppDown, SreAppHighErrorRate, SreAppHighLatencyP99, JvmMemoryFillingUp, JvmThreadsDeadlocked |
+| **Kafka**                | Strimzi Kafka (broker JMX), Strimzi Kafka Exporter (consumer lag) · *Kafka* | KafkaConsumerLagHigh, KafkaExporterDown, KafkaNoBrokers |
+| **Postgres**             | CloudNativePG · *PostgreSQL* | PostgresClusterDown, PostgresTooManyConnections |
+
+The JVM board + its 2 alerts are rendered from the grafana **`jvm-observ-lib` mixin** (metric source
+`java_micrometer`, selector `job=~"sre-.*"`); the app/Kafka/Postgres alert groups ship with the
+deployment. Each board exists because its component exports the matching metrics — Micrometer JVM/HTTP
+for the apps, kafka-exporter + broker JMX for Kafka, the CNPG metrics endpoint for Postgres.
+
+---
+
+## Backstage service catalog
+
+`catalog-info.yaml` (repo root) registers the stack in the Backstage software catalog:
+
+* **System** `sample-java-app` (in **Domain** `platform-observability`, owned by **Group** `team-sre`).
+* **Components** (`type: service`): `sre-front`, `sre-back`, `sre-reader` — each carries a
+  `backstage.io/kubernetes-label-selector` (lights up the Backstage Kubernetes plugin: pods/health),
+  a source location and a Swagger link.
+* **APIs** (`type: openapi`, inline specs): `sre-front-api` (provided by Front, consumed by Back) and
+  `sre-reader-api` (provided by Reader).
+* **Resources**: `kafka-cluster` (message-broker, mTLS) and `postgres-db` (database, TLS).
+* **Relations** tie it together — Front `dependsOn` Kafka; Back `dependsOn` Kafka + Postgres; Reader
+  `dependsOn` Postgres; all `partOf` the System — so Backstage renders the full dependency graph.
 
 ---
 
@@ -107,15 +162,59 @@ attributes.
 
 ---
 
-## Security & ops
+## Security — protecting the APIs
 
-Restricted-style pod security everywhere (non-root, dropped caps, `readOnlyRootFilesystem`, seccomp,
-no SA token), PSA `baseline`/`restricted`. **NetworkPolicies enabled**: default-deny with only
-app+management ports reachable and a tight egress allowlist (DNS, in-namespace Kafka/PG, Tempo/Alloy,
-Pyroscope) — verified non-breaking.
+Defence-in-depth across the four API surfaces:
+
+* **Public REST APIs** — Front `POST /api/v1/command`, Reader `GET /api/v1/testEntity` and Swagger
+  are exposed only through the nginx **Ingress over HTTPS** (cert-manager / Let's Encrypt cert per
+  host). Only the `http` port is internet-routed; **Back (consumer) has no ingress at all**.
+  *Honest gap:* the challenge app ships no Spring Security, so these endpoints have **no
+  application-level authn/authz** — anyone who can reach the hostname can post/read. This is the top
+  item on the hardening backlog (API key / OAuth2 resource-server / mTLS at the ingress). Everything
+  *around* the endpoint is locked down instead.
+* **Management / actuator API** (port 8081 — health, metrics, `/prometheus`) — **not internet-
+  exposed** (the Ingress backend points only at the `http` port; 8081 stays cluster-internal, reached
+  only by Alloy scrape + kubelet probes) and **read-only + minimal**: `access.default: read_only`,
+  exposure limited to `health,info,metrics,prometheus` (no `env` / `heapdump` / `shutdown` / `loggers`).
+* **Kafka (messaging API)** — **mutual TLS only**: the plaintext 9092 listener is removed and the
+  9093 listener requires a Strimzi-issued client certificate (`KafkaUser sre-app`). No cert ⇒ no
+  connection.
+* **Postgres (data API)** — connections use **TLS** (`sslmode=require`); credentials come from the
+  CNPG-generated `sre-postgres-app` secret, never hard-coded.
+
+Net: transport and network layers are locked down (HTTPS in, mTLS/TLS to backends, default-deny
+east-west, minimal read-only ops endpoints); the remaining authentication gap is specifically at the
+app's own HTTP handlers. The container / runtime / network controls behind this are detailed next.
+
+## Container, runtime & network hardening
+
+* **Image / build** — multi-stage build (Gradle builder → slim `eclipse-temurin:21-jre` runtime) with
+  a baked-in non-root user (uid 10001) and the jar at `/app.jar`. The OTel + Pyroscope agents are
+  baked in but **inert** (activated only via env), so the image stays generic and no agent runs
+  unless the chart asks for it.
+* **Container `securityContext`** — `runAsNonRoot` (10001/10001), **`readOnlyRootFilesystem`**
+  (writable `/tmp` is an `emptyDir`), **all Linux capabilities dropped** (`drop: [ALL]`),
+  `allowPrivilegeEscalation: false`, **seccomp `RuntimeDefault`**, and **`automountServiceAccountToken:
+  false`** (no API-server token to steal if the process is popped).
+* **Pod / namespace** — CPU/memory requests+limits, container-aware heap (`-XX:MaxRAMPercentage=75`),
+  liveness / readiness / startup probes on the management port, and `fsGroup` so the non-root process
+  can read the mounted mTLS keystores. The namespace **enforces PSA `baseline`** (Strimzi/CNPG
+  compatible) and **audits/warns at `restricted`**; the same hardened context is applied to the
+  monitor-tools and load-generator Jobs.
+* **Network** — a **default-deny `NetworkPolicy`** per app: ingress only on the `http` + `management`
+  ports (every other port dropped), and an **egress allowlist** to exactly DNS (kube-system),
+  in-namespace Kafka/Postgres, the Tempo/Alloy OTLP receiver and Pyroscope. A compromised app
+  therefore can't reach the Kubernetes API server, other namespaces, or the internet.
+* **Runtime / supply chain** — images are built locally and **sideloaded into the node's cri-o**
+  (`containers-storage`) over SSH, so nothing transits a third-party registry; pods run
+  `imagePullPolicy: IfNotPresent` against the vetted local image.
+
+## Ops
 
 Bring-up is a single `make all` (build → sideload images into cri-o → operators → Kafka/Postgres →
 apps → dashboards/alerts); `make verify` asserts the pipeline plus all four telemetry pillars.
 
-> The 2nd-iteration code-review / hardening backlog: client-cert Postgres mTLS, multi-broker Kafka /
-> HA Postgres on a multi-node cluster, and external-secret management for the Grafana credentials.
+> Hardening backlog: app-level authn/authz on the REST endpoints, client-cert Postgres mTLS,
+> multi-broker Kafka / HA Postgres on a multi-node cluster, and external-secret management for the
+> Grafana credentials.
