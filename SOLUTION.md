@@ -32,8 +32,8 @@ Traces and profiles are activated purely by env/agent flags from the Helm chart,
 generic. `OTEL_TRACES_EXPORTER=otlp`, `OTEL_METRICS/LOGS_EXPORTER=none` (metrics come from the
 Prometheus scrape, logs from stdout).
 
-**Files:** `app/{front,back,reader}/build.gradle`, `app/*/src/main/resources/application.yaml`; the
-agents are fetched in `docker/Dockerfile` and attached via env in `chart/java-app/templates/deployment.yaml`.
+**Files:** [`app/`](app/) (`build.gradle` + `application.yaml` per module), [`docker/Dockerfile`](docker/Dockerfile),
+[`chart/java-app/templates/deployment.yaml`](chart/java-app/templates/deployment.yaml).
 
 ---
 
@@ -57,8 +57,8 @@ When aliased, `.Chart.Name` is the alias, so the base templates name objects `sr
 automatically. Per-service config lives under `front:`/`back:`/`reader:`; `global:` is shared;
 `<svc>.enabled` adds/removes a service. One set of templates, three composed instances — DRY.
 
-**Files:** `chart/java-app/` (base chart + `templates/`), `chart/sre-apps/Chart.yaml` (aliased deps)
-and `chart/sre-apps/values.yaml` (per-service config).
+**Files:** [`chart/java-app/`](chart/java-app/) (base chart), [`chart/sre-apps/Chart.yaml`](chart/sre-apps/Chart.yaml)
+(aliased deps) and [`chart/sre-apps/values.yaml`](chart/sre-apps/values.yaml) (per-service config).
 
 ---
 
@@ -71,9 +71,11 @@ and `chart/sre-apps/values.yaml` (per-service config).
 * **PostgreSQL — TLS.** CloudNativePG serves TLS; Back and Reader connect with `sslmode=require`.
   (Client-certificate Postgres auth is a straightforward follow-up.)
 
-**Files:** `k8s/kafka/kafka-cluster.yaml` (listener), `k8s/kafka/kafka-user.yaml` (client cert),
-`k8s/postgres/postgres-cluster.yaml`; SSL env + keystore mounts in `chart/sre-apps/values.yaml`
-(front/back) and `chart/java-app/templates/deployment.yaml` (`extraVolumes`).
+**Files:** [`k8s/kafka/kafka-cluster.yaml`](k8s/kafka/kafka-cluster.yaml) (listener),
+[`k8s/kafka/kafka-user.yaml`](k8s/kafka/kafka-user.yaml) (client cert),
+[`k8s/postgres/postgres-cluster.yaml`](k8s/postgres/postgres-cluster.yaml); SSL env + keystore mounts in
+[`chart/sre-apps/values.yaml`](chart/sre-apps/values.yaml) and
+[`chart/java-app/templates/deployment.yaml`](chart/java-app/templates/deployment.yaml).
 
 ---
 
@@ -85,8 +87,8 @@ and `chart/sre-apps/values.yaml` (per-service config).
 * **PostgreSQL 16** — CloudNativePG. Database `appdb`; the schema is created by Back on first run
   (Hibernate `ddl-auto=update`). CNPG metrics annotated for scrape.
 
-**Files:** `k8s/kafka/` (`kafka-cluster.yaml`, `kafka-topic.yaml`, `kafka-metrics-configmap.yaml`),
-`k8s/postgres/postgres-cluster.yaml`.
+**Files:** [`k8s/kafka/`](k8s/kafka/) (`kafka-cluster.yaml`, `kafka-topic.yaml`, `kafka-metrics-configmap.yaml`),
+[`k8s/postgres/postgres-cluster.yaml`](k8s/postgres/postgres-cluster.yaml).
 
 ---
 
@@ -100,8 +102,8 @@ and `chart/sre-apps/values.yaml` (per-service config).
   groups into the **Mimir ruler** (→ Alertmanager). Idempotent, hardened non-root, no external deps.
 * **Alerts** — 11 rules across app / JVM / Kafka / Postgres (see **Alerting** below).
 
-**Files:** `observability/mixin/` (JVM mixin render), `observability/dashboards/` (Strimzi/CNPG boards),
-`monitor-tools/` (chart + `templates/job-push.yaml`), `scripts/assemble-dashboards.sh`.
+**Files:** [`observability/mixin/`](observability/mixin/), [`observability/dashboards/`](observability/dashboards/),
+[`monitor-tools/`](monitor-tools/) (chart + `templates/job-push.yaml`), [`scripts/assemble-dashboards.sh`](scripts/assemble-dashboards.sh).
 
 ---
 
@@ -129,8 +131,9 @@ saturation for the infrastructure — warnings are tuned to fire *before* the ma
 Grafana dashboards; the app/Kafka/Postgres rule sources ship with the deployment, the two JVM rules
 are rendered from the mixin.
 
-**Files:** `observability/alerts/{app,kafka,postgres}-alerts.yaml`, `observability/mixin/alerts.yaml`
-(JVM); loaded into the Mimir ruler by `monitor-tools/templates/job-push.yaml`.
+**Files:** [`observability/alerts/`](observability/alerts/) (app/kafka/postgres),
+[`observability/mixin/alerts.yaml`](observability/mixin/alerts.yaml) (JVM); loaded into the Mimir ruler by
+[`monitor-tools/templates/job-push.yaml`](monitor-tools/templates/job-push.yaml).
 
 ---
 
@@ -174,7 +177,7 @@ The catalog graph as rendered in Backstage:
 
 ![Backstage catalog graph for sample-java-app](doc/img/backstage-catalog.png)
 
-**Files:** `catalog-info.yaml` (repo root).
+**Files:** [`catalog-info.yaml`](catalog-info.yaml).
 
 ---
 
@@ -203,8 +206,9 @@ Net: transport and network layers are locked down (HTTPS in, mTLS/TLS to backend
 east-west, minimal read-only ops endpoints); the remaining authentication gap is specifically at the
 app's own HTTP handlers. The container / runtime / network controls behind this are detailed next.
 
-**Files:** `chart/java-app/templates/ingress.yaml` (HTTPS), `chart/java-app/templates/networkpolicy.yaml`,
-`app/*/src/main/resources/application.yaml` (actuator `read_only`), `k8s/kafka/` + `k8s/postgres/` (mTLS/TLS).
+**Files:** [`chart/java-app/templates/ingress.yaml`](chart/java-app/templates/ingress.yaml) (HTTPS),
+[`chart/java-app/templates/networkpolicy.yaml`](chart/java-app/templates/networkpolicy.yaml),
+[`app/`](app/) (actuator `read_only`), [`k8s/kafka/`](k8s/kafka/) + [`k8s/postgres/`](k8s/postgres/) (mTLS/TLS).
 
 ## Container, runtime & network hardening
 
@@ -229,8 +233,10 @@ app's own HTTP handlers. The container / runtime / network controls behind this 
   (`containers-storage`) over SSH, so nothing transits a third-party registry; pods run
   `imagePullPolicy: IfNotPresent` against the vetted local image.
 
-**Files:** `docker/Dockerfile`, `chart/java-app/templates/deployment.yaml` (`securityContext`) +
-`chart/java-app/templates/networkpolicy.yaml`, `scripts/sideload-images.sh`.
+**Files:** [`docker/Dockerfile`](docker/Dockerfile),
+[`chart/java-app/templates/deployment.yaml`](chart/java-app/templates/deployment.yaml) (`securityContext`) +
+[`chart/java-app/templates/networkpolicy.yaml`](chart/java-app/templates/networkpolicy.yaml),
+[`scripts/sideload-images.sh`](scripts/sideload-images.sh).
 
 ## Ops
 
@@ -241,8 +247,9 @@ Local development needs no cluster — **`docker compose up --build`** (root `do
 `Dockerfile`) runs Kafka (KRaft) + PostgreSQL + the three services, with the `testCommand` topic
 pre-created at 32 partitions. Front on `:8080`, Reader on `:8084`, Swagger + `/health` on each.
 
-**Files:** `Makefile`, `scripts/` (`build-images.sh`, `sideload-images.sh`, `verify.sh`),
-`docker-compose.yml`, `Dockerfile`; deeper docs in `doc/DEPLOYMENT.md`, `doc/ARCHITECTURE.md`, `doc/RUNBOOK.md`.
+**Files:** [`Makefile`](Makefile), [`scripts/`](scripts/) (`build-images.sh`, `sideload-images.sh`, `verify.sh`),
+[`docker-compose.yml`](docker-compose.yml), [`Dockerfile`](Dockerfile); docs in
+[`doc/DEPLOYMENT.md`](doc/DEPLOYMENT.md), [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md), [`doc/RUNBOOK.md`](doc/RUNBOOK.md).
 
 > Hardening backlog: app-level authn/authz on the REST endpoints, client-cert Postgres mTLS,
 > multi-broker Kafka / HA Postgres on a multi-node cluster, and external-secret management for the
