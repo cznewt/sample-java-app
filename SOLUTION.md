@@ -1,4 +1,4 @@
-# Solution — full-observability deployment of the sample java app
+# Solution — Secure and observable java application stack
 
 This is the SRE-challenge write-up for deploying **Front → Kafka → Back → PostgreSQL → Reader** to
 the `*.monlab.newt.cz` Kubernetes cluster. The deployment artifacts (Helm charts, dashboards, alert
