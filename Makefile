@@ -10,7 +10,7 @@ NS           ?= sre-challenge
 HELM         := helm
 KUBECTL      := kubectl
 
-.PHONY: all images sideload operators data apps observability verify status clean destroy
+.PHONY: all images sideload operators data apps observability verify status clean destroy build up down
 
 all: images sideload operators data apps observability verify ## full bring-up
 
@@ -54,6 +54,16 @@ mixin: ## (optional) re-render the JVM mixin from grafana jvm-observ-lib (needs 
 
 verify: ## exercise the pipeline and print a pillar summary
 	bash $(ROOT)/scripts/verify.sh
+
+# --- local development (docker compose: Kafka + Postgres + the 3 apps) ---
+build: ## build the local images (docker compose build)
+	docker compose build
+
+up: ## run the full stack locally
+	docker compose up --build -d
+
+down: ## stop and remove the local stack
+	docker compose down -v
 
 status: ## show releases + pods
 	$(HELM) list -A
