@@ -1,0 +1,17 @@
+# Challenge spec: name=testCommand, partitions=32, replication-factor=1.
+# k8s object name must be lowercase, so the real Kafka topic name is set via topicName.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: test-command
+  namespace: sre-challenge
+  labels:
+    strimzi.io/cluster: sre-kafka
+    app.kubernetes.io/part-of: sre-challenge
+spec:
+  topicName: testCommand
+  partitions: 32
+  replicas: 1
+  config:
+    retention.ms: "604800000"   # 7d
+    segment.bytes: "1073741824"

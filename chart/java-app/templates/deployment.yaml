@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  labels:
+    {{- include "java-app.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "java-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "java-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ .Values.appName | quote }}
+      annotations:
+        {{- if .Values.telemetry.metrics.enabled }}
+        # Grafana Alloy annotation-autodiscovery -> Prometheus/Mimir
+        k8s.grafana.com/scrape: "true"
+        k8s.grafana.com/metrics.portNumber: {{ .Values.telemetry.metrics.port | quote }}
+        k8s.grafana.com/metrics.path: {{ .Values.telemetry.metrics.path | quote }}
+        k8s.grafana.com/job: {{ .Values.appName | quote }}
+        k8s.grafana.com/instance: {{ include "java-app.fullname" . | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "java-app.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ include "java-app.name" . }}
+          image: {{ include "java-app.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy | default .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.http }}
+            - name: management
+              containerPort: {{ .Values.ports.management }}
+          env:
+            {{- $jto := list }}
+            {{- if .Values.telemetry.traces.enabled }}
+            {{- $jto = append $jto "-javaagent:/opt/agents/opentelemetry-javaagent.jar" }}
+            {{- end }}
+            {{- if .Values.telemetry.profiles.enabled }}
+            {{- $jto = append $jto "-javaagent:/opt/agents/pyroscope.jar" }}
+            {{- end }}
+            {{- if $jto }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ join " " $jto | quote }}
+            {{- end }}
+            {{- if .Values.telemetry.traces.enabled }}
+            # --- OpenTelemetry (traces only; metrics via Prometheus, logs via Loki) ---
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.appName | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.telemetry.traces.endpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ .Values.telemetry.traces.protocol | quote }}
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=sre-challenge,service.version={{ .Values.global.image.tag }},deployment.environment={{ .Values.global.environment }}"
+            # Keep producer->consumer as ONE connected trace through Kafka
+            # (a separate "receive" span would split it into linked traces).
+            - name: OTEL_INSTRUMENTATION_MESSAGING_EXPERIMENTAL_RECEIVE_TELEMETRY_ENABLED
+              value: "false"
+            - name: OTEL_INSTRUMENTATION_KAFKA_EXPERIMENTAL_SPAN_ATTRIBUTES
+              value: "true"
+            {{- end }}
+            {{- if .Values.telemetry.profiles.enabled }}
+            # --- Pyroscope continuous profiling ---
+            - name: PYROSCOPE_APPLICATION_NAME
+              value: {{ .Values.appName | quote }}
+            - name: PYROSCOPE_SERVER_ADDRESS
+              value: {{ .Values.telemetry.profiles.endpoint | quote }}
+            - name: PYROSCOPE_FORMAT
+              value: "jfr"
+            - name: PYROSCOPE_PROFILING_ENABLED
+              value: "true"
+            - name: PYROSCOPE_LABELS
+              value: "namespace=sre-challenge,app={{ .Values.appName }}"
+            {{- end }}
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- range .Values.envFromSecret }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .key }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.probes.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}
+              port: management
+            periodSeconds: 5
+            failureThreshold: 40          # ~200s budget for agent-laden JVM cold start
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}/liveness
+              port: management
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}/readiness
+              port: management
+            periodSeconds: 10
+            failureThreshold: 3
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

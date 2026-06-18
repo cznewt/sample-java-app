@@ -1,0 +1,25 @@
+# monitor-tools — pushes curated dashboards into a Grafana folder.
+grafana:
+  # In-cluster Grafana service (no need to traverse the public ingress).
+  url: "http://grafana-server.global-monitor-grafana.svc.cluster.local:3000"
+  user: "admin"
+  password: "CHANGEME"          # lab default; override with --set or an external secret in prod
+
+# All assignment dashboards live under ONE top-level Grafana folder, split into
+# nested subfolders by category. "dir" matches the "<dir>__" filename prefix.
+assignmentFolder:
+  uid: "sre-challenge"
+  title: "SRE Challenge — Boerse"
+folders:
+  - { dir: kafka,    uid: "sre-kafka",    title: "Kafka" }
+  - { dir: postgres, uid: "sre-postgres", title: "PostgreSQL" }
+  - { dir: javaapp,  uid: "sre-javaapp",  title: "Java apps (JVM)" }
+
+# Mimir ruler — alert rule groups are loaded here (evaluated -> Alertmanager).
+mimir:
+  url: "http://mimir-monolith.global-monitor-mimir.svc.cluster.local:9009"
+  tenant: "anonymous"
+  namespace: "sre-challenge"
+
+# Small image with curl + busybox sh (already present on the node).
+image: "curlimages/curl:8.11.0"

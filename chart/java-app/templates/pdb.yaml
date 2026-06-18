@@ -1,0 +1,13 @@
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  labels:
+    {{- include "java-app.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "java-app.selectorLabels" . | nindent 6 }}
+{{- end }}

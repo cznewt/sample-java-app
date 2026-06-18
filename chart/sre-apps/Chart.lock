@@ -1,0 +1,12 @@
+dependencies:
+- name: java-app
+  repository: file://../java-app
+  version: 0.1.0
+- name: java-app
+  repository: file://../java-app
+  version: 0.1.0
+- name: java-app
+  repository: file://../java-app
+  version: 0.1.0
+digest: sha256:445323de225ae7c11d691935b90522bd6a5d45172ffb324fdc2ab901ffe9b4e6
+generated: "2026-06-18T08:40:17.344366914+02:00"

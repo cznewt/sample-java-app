@@ -1,0 +1,31 @@
+# Mimir ruler group (namespace: sre-challenge, tenant: anonymous)
+name: sre-kafka
+interval: 30s
+rules:
+  - alert: KafkaConsumerLagHigh
+    expr: max by (consumergroup, topic) (kafka_consumergroup_lag{topic="testCommand"}) > 1000
+    for: 5m
+    labels:
+      severity: warning
+      team: sre
+    annotations:
+      summary: "Kafka consumer lag high ({{ $labels.consumergroup }} on {{ $labels.topic }})"
+      description: "Consumer lag is {{ $value }} messages for over 5 minutes — Back is not keeping up."
+  - alert: KafkaExporterDown
+    expr: up{job="integrations/kafka-exporter"} == 0
+    for: 5m
+    labels:
+      severity: warning
+      team: sre
+    annotations:
+      summary: "Kafka exporter is down"
+      description: "Consumer-group lag metrics have been unavailable for 5 minutes."
+  - alert: KafkaNoBrokers
+    expr: kafka_brokers < 1
+    for: 2m
+    labels:
+      severity: critical
+      team: sre
+    annotations:
+      summary: "No Kafka brokers online"
+      description: "kafka_brokers reports {{ $value }} — the cluster is unavailable."

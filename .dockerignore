@@ -6,3 +6,15 @@ doc/
 **/.gradle/
 *.md
 .gitignore
+
+# Deployment / solution artifacts (not needed to build the app images)
+chart/
+k8s/
+monitor-tools/
+observability/
+scripts/
+docker/
+Makefile
+catalog-info.yaml
+docker-compose.yml
+.kube/

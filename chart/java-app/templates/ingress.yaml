@@ -1,0 +1,31 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  labels:
+    {{- include "java-app.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.tls }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ include "java-app.fullname" . }}-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "java-app.fullname" . }}
+                port:
+                  name: http
+{{- end }}

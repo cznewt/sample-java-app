@@ -15,10 +15,15 @@
 .gradle
 build/
 
-# Cluster credentials — never commit
-_solution/.kube/
-**/.kube/config
+# Secrets — never commit (kubeconfigs, keystores, secret manifests, env files)
+**/.kube/
 *.kubeconfig
+admin.conf
+*.pem
+*.p12
+*-secret.yaml
+values-secret*.yaml
+.env
 
 # Vendored Helm subchart packages (re-created by `helm dependency build`)
 **/charts/*.tgz

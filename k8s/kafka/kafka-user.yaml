@@ -1,0 +1,14 @@
+# mTLS client identity for Front + Back. The User Operator issues a client cert
+# signed by the cluster's clients-CA and writes it to secret "sre-app"
+# (keys: user.crt, user.key, user.p12, user.password, ca.crt).
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: sre-app
+  namespace: sre-challenge
+  labels:
+    strimzi.io/cluster: sre-kafka
+    app.kubernetes.io/part-of: sre-challenge
+spec:
+  authentication:
+    type: tls

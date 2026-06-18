@@ -1,0 +1,24 @@
+apiVersion: v2
+name: sre-apps
+description: >-
+  Umbrella chart for the SRE challenge. Instantiates the reusable java-app base
+  chart three times (front/back/reader) as enable-gated aliased subcharts.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: java-app
+    version: 0.1.0
+    repository: "file://../java-app"
+    alias: front
+    condition: front.enabled
+  - name: java-app
+    version: 0.1.0
+    repository: "file://../java-app"
+    alias: back
+    condition: back.enabled
+  - name: java-app
+    version: 0.1.0
+    repository: "file://../java-app"
+    alias: reader
+    condition: reader.enabled

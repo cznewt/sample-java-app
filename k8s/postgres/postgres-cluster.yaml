@@ -1,0 +1,38 @@
+# PostgreSQL 16+ via CloudNativePG. Schema is created on Back's first run
+# (Hibernate ddl-auto=update). CNPG auto-generates the `sre-postgres-app`
+# secret (username/password/dbname) consumed by Back and Reader.
+# Metrics (port 9187) are annotated for Grafana Alloy annotation-autodiscovery.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sre-postgres
+  namespace: sre-challenge
+  labels:
+    app.kubernetes.io/part-of: sre-challenge
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 5Gi
+  bootstrap:
+    initdb:
+      database: appdb
+      owner: appuser
+  postgresql:
+    parameters:
+      max_connections: "200"
+  monitoring:
+    enablePodMonitor: false
+  inheritedMetadata:
+    annotations:
+      k8s.grafana.com/scrape: "true"
+      k8s.grafana.com/metrics.portNumber: "9187"
+      k8s.grafana.com/metrics.path: "/metrics"
+      k8s.grafana.com/job: "integrations/postgres"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

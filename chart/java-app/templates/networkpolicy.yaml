@@ -1,0 +1,49 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  labels:
+    {{- include "java-app.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "java-app.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  # ---- Ingress: only the app + management ports are reachable; all other ports denied.
+  # Sources are intentionally broad on these two ports: the ingress controller may be
+  # hostNetwork and kubelet health probes are node-sourced (a podSelector would drop them).
+  ingress:
+    - ports:
+        - {protocol: TCP, port: http}
+        - {protocol: TCP, port: management}
+  # ---- Egress: explicit allowlist (default-deny everything else).
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    # Same namespace: Kafka (9092) and PostgreSQL (5432)
+    - to:
+        - podSelector: {}
+    # Traces -> Alloy receiver (kube-monitor) and Tempo (direct fallback)
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-monitor}
+      ports:
+        - {protocol: TCP, port: 4317}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: global-monitor-tempo}
+      ports:
+        - {protocol: TCP, port: 4317}
+    # Profiles -> Pyroscope
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: global-monitor-pyroscope}
+      ports:
+        - {protocol: TCP, port: 4040}
+{{- end }}

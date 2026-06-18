@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-push-{{ .Release.Revision }}
+  labels:
+    app.kubernetes.io/part-of: sre-challenge
+    app.kubernetes.io/component: dashboard-pusher
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: sre-challenge
+        app.kubernetes.io/component: dashboard-pusher
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 100
+        fsGroup: 100
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: push
+          image: {{ .Values.image }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: GRAFANA_URL
+              value: {{ .Values.grafana.url | quote }}
+            - name: GRAFANA_USER
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-grafana, key: username }
+            - name: GRAFANA_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-grafana, key: password }
+            - name: MIMIR_URL
+              value: {{ .Values.mimir.url | quote }}
+            - name: MIMIR_TENANT
+              value: {{ .Values.mimir.tenant | quote }}
+            - name: MIMIR_NAMESPACE
+              value: {{ .Values.mimir.namespace | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              # Single top-level assignment folder
+              printf '{"uid":"%s","title":"%s"}' "{{ .Values.assignmentFolder.uid }}" "{{ .Values.assignmentFolder.title }}" > /tmp/f.json
+              curl -sS -u "$GRAFANA_USER:$GRAFANA_PASSWORD" -X POST "$GRAFANA_URL/api/folders" \
+                -H 'Content-Type: application/json' -d @/tmp/f.json -o /dev/null -w "  parent folder -> http=%{http_code}\n" || true
+              n=0; ok=0
+              {{- range .Values.folders }}
+              # Nested subfolder (create with parentUid; move handles a pre-existing top-level one)
+              printf '{"uid":"%s","title":"%s","parentUid":"%s"}' "{{ .uid }}" "{{ .title }}" "{{ $.Values.assignmentFolder.uid }}" > /tmp/f.json
+              curl -sS -u "$GRAFANA_USER:$GRAFANA_PASSWORD" -X POST "$GRAFANA_URL/api/folders" \
+                -H 'Content-Type: application/json' -d @/tmp/f.json -o /dev/null -w "  subfolder {{ .title }} -> http=%{http_code}\n" || true
+              printf '{"parentUid":"%s"}' "{{ $.Values.assignmentFolder.uid }}" > /tmp/m.json
+              curl -sS -u "$GRAFANA_USER:$GRAFANA_PASSWORD" -X POST "$GRAFANA_URL/api/folders/{{ .uid }}/move" \
+                -H 'Content-Type: application/json' -d @/tmp/m.json -o /dev/null -w "  move {{ .title }} -> http=%{http_code}\n" || true
+              for f in /dashboards/{{ .dir }}__*.json; do
+                [ -e "$f" ] || continue
+                n=$((n+1))
+                { printf '{"dashboard":'; cat "$f"; printf ',"folderUid":"%s","overwrite":true}' "{{ .uid }}"; } > /tmp/body.json
+                code=$(curl -sS -u "$GRAFANA_USER:$GRAFANA_PASSWORD" -X POST "$GRAFANA_URL/api/dashboards/db" \
+                  -H 'Content-Type: application/json' -d @/tmp/body.json -o /tmp/resp.json -w "%{http_code}")
+                echo "  [$code] $(basename "$f") -> {{ $.Values.assignmentFolder.title }}/{{ .title }}"
+                [ "$code" = "200" ] && ok=$((ok+1))
+              done
+              {{- end }}
+              echo "pushed $ok/$n dashboards into nested folders"
+              echo "Loading alert rule groups into Mimir ruler (namespace=$MIMIR_NAMESPACE tenant=$MIMIR_TENANT) ..."
+              rn=0; rok=0
+              for r in /rules/*.yaml; do
+                rn=$((rn+1))
+                code=$(curl -sS -H "X-Scope-OrgID: $MIMIR_TENANT" -H 'Content-Type: application/yaml' \
+                  -X POST "$MIMIR_URL/prometheus/config/v1/rules/$MIMIR_NAMESPACE" --data-binary @"$r" \
+                  -o /tmp/rresp.json -w "%{http_code}")
+                echo "  [$code] $(basename "$r"): $(tr -d '\n' < /tmp/rresp.json | cut -c1-80)"
+                case "$code" in 2*) rok=$((rok+1));; esac
+              done
+              echo "loaded $rok/$rn rule groups into Mimir"
+              [ "$ok" = "$n" ] && [ "$rok" = "$rn" ]
+          volumeMounts:
+            - { name: dashboards, mountPath: /dashboards, readOnly: true }
+            - { name: rules, mountPath: /rules, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: dashboards
+          configMap:
+            name: {{ .Release.Name }}-dashboards
+        - name: rules
+          configMap:
+            name: {{ .Release.Name }}-rules
+        - name: tmp
+          emptyDir: {}

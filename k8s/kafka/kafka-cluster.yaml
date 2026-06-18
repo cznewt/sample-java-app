@@ -1,0 +1,90 @@
+# Single-node KRaft Kafka (no ZooKeeper) via Strimzi node pools.
+# Broker JMX metrics (9404) + kafka-exporter (consumer-group lag) are both
+# annotated for Grafana Alloy annotation-autodiscovery.
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: kafka
+  namespace: sre-challenge
+  labels:
+    strimzi.io/cluster: sre-kafka
+    app.kubernetes.io/part-of: sre-challenge
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        kraftMetadata: shared
+        deleteClaim: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: sre-kafka
+  namespace: sre-challenge
+  labels:
+    app.kubernetes.io/part-of: sre-challenge
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: 4.1.0
+    metadataVersion: 4.1-IV0
+    listeners:
+      # mTLS only — plaintext listener removed. Clients authenticate with a
+      # Strimzi-issued client certificate (KafkaUser sre-app, see kafka-user.yaml).
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+    config:
+      # Single broker -> everything replication-factor 1 (per challenge spec)
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka-metrics-config.yml
+    template:
+      pod:
+        metadata:
+          annotations:
+            k8s.grafana.com/scrape: "true"
+            k8s.grafana.com/metrics.portNumber: "9404"
+            k8s.grafana.com/metrics.path: "/metrics"
+            k8s.grafana.com/job: "integrations/kafka"
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+  kafkaExporter:
+    topicRegex: ".*"
+    groupRegex: ".*"
+    template:
+      pod:
+        metadata:
+          annotations:
+            k8s.grafana.com/scrape: "true"
+            k8s.grafana.com/metrics.portNumber: "9404"
+            k8s.grafana.com/metrics.path: "/metrics"
+            k8s.grafana.com/job: "integrations/kafka-exporter"

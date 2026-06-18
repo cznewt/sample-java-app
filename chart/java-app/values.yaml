@@ -1,0 +1,104 @@
+# Base "java-app" chart defaults. Overridden per service by the umbrella chart.
+nameOverride: ""
+replicaCount: 1
+# Logical service name -> spring.application.name / OTEL_SERVICE_NAME / pyroscope app / metric job
+appName: "app"
+
+# Shared across all subcharts (set in the umbrella's global:)
+global:
+  image:
+    registry: localhost
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  environment: monlab
+
+image:
+  registry: ""        # falls back to global.image.registry
+  repository: ""       # REQUIRED per service (sre-front / sre-back / sre-reader)
+  tag: ""             # falls back to global.image.tag
+  pullPolicy: ""      # falls back to global.image.pullPolicy
+
+serviceAccount:
+  create: true
+  name: ""
+
+ports:
+  http: 8080          # app server port (per service)
+  management: 8081    # actuator / metrics / health
+
+service:
+  type: ClusterIP
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 768Mi
+
+probes:
+  enabled: true
+  path: /health       # actuator base-path is "/", probes enabled -> /health/{liveness,readiness}
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  path: /
+  tls: true
+  clusterIssuer: letsencrypt
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 75
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# Default-deny posture: only app+management ports reachable (ingress), and a tight
+# egress allowlist (DNS, in-namespace Kafka/PG, Tempo/Alloy, Pyroscope). Verified to
+# preserve kubelet probes, Alloy scrape, ingress and all four telemetry signals.
+networkPolicy:
+  enabled: true
+
+# ---- Observability wiring into the monlab LGTM stack ----
+telemetry:
+  metrics:
+    enabled: true
+    path: /prometheus              # micrometer-registry-prometheus endpoint (base-path "/")
+    port: 8081                     # scraped by Grafana Alloy annotation-autodiscovery
+  traces:
+    enabled: true
+    # Blessed path: OTel java agent -> Alloy receiver (adds k8s resource attributes)
+    # -> Tempo. (We fixed the receiver's signal routing: metrics->Mimir, logs->Loki,
+    # traces->Tempo; previously it sent all signals to Tempo and dropped them.)
+    endpoint: "http://k8s-monitoring-alloy-receiver.kube-monitor.svc.cluster.local:4317"
+    protocol: grpc
+  profiles:
+    enabled: true
+    endpoint: "http://pyroscope.global-monitor-pyroscope.svc.cluster.local:4040"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# Extra plain env vars: [{name, value}]
+env: []
+# Env from secret keys: [{name, secretName, key}]
+envFromSecret: []
+# Extra volumes / mounts (e.g. mTLS keystores+truststores). Standard k8s syntax.
+extraVolumes: []
+extraVolumeMounts: []

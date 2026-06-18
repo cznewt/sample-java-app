@@ -1,0 +1,25 @@
+# Mimir ruler group (namespace: sre-challenge, tenant: anonymous)
+name: sre-postgres
+interval: 30s
+rules:
+  - alert: PostgresClusterDown
+    expr: cnpg_collector_up{namespace="sre-challenge"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      team: sre
+    annotations:
+      summary: "CloudNativePG cluster is down"
+      description: "cnpg_collector_up=0 for {{ $labels.pod }} for 2 minutes."
+  - alert: PostgresTooManyConnections
+    expr: |
+      sum by (pod) (cnpg_backends_total{namespace="sre-challenge"})
+        /
+      max by (pod) (cnpg_pg_settings_setting{name="max_connections", namespace="sre-challenge"}) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      team: sre
+    annotations:
+      summary: "Postgres connection usage > 80% ({{ $labels.pod }})"
+      description: "{{ $labels.pod }} is using {{ $value | humanizePercentage }} of max_connections."

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: java-app
+description: >-
+  Reusable base chart for a containerised Spring Boot (JVM) service with
+  first-class observability: Prometheus scrape annotations, OpenTelemetry trace
+  export, Pyroscope continuous profiling and structured JSON logs. Instantiated
+  once per service (front/back/reader) as an aliased subchart of the umbrella.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: SRE Challenge

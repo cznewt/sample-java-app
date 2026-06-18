@@ -1,0 +1,135 @@
+# ====================================================================
+# Umbrella values. `global` is shared with every subchart; the front/
+# back/reader blocks are the per-instance values for the aliased
+# java-app subcharts. Flip <svc>.enabled to add/remove a service.
+# ====================================================================
+global:
+  image:
+    registry: localhost          # images sideloaded into cri-o (imagePullPolicy IfNotPresent)
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  environment: monlab
+
+# -------------------- FRONT: REST ingest -> Kafka producer --------------------
+front:
+  enabled: true
+  appName: sre-front
+  image:
+    repository: sre-front
+  ports:
+    http: 8080
+    management: 8081
+  ingress:
+    enabled: true
+    host: sre-front.monlab.newt.cz
+  pdb:
+    enabled: true
+  env:
+    - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+      value: "sre-kafka-kafka-bootstrap:9093"
+    - name: SPRING_KAFKA_SECURITY_PROTOCOL
+      value: "SSL"
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_LOCATION
+      value: "file:/etc/kafka-certs/ca/ca.p12"
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_TYPE
+      value: "PKCS12"
+    - name: SPRING_KAFKA_SSL_KEY_STORE_LOCATION
+      value: "file:/etc/kafka-certs/user/user.p12"
+    - name: SPRING_KAFKA_SSL_KEY_STORE_TYPE
+      value: "PKCS12"
+  envFromSecret:
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD
+      secretName: sre-kafka-cluster-ca-cert
+      key: ca.password
+    - name: SPRING_KAFKA_SSL_KEY_STORE_PASSWORD
+      secretName: sre-app
+      key: user.password
+  extraVolumes:
+    - name: kafka-ca
+      secret: { secretName: sre-kafka-cluster-ca-cert }
+    - name: kafka-user
+      secret: { secretName: sre-app }
+  extraVolumeMounts:
+    - name: kafka-ca
+      mountPath: /etc/kafka-certs/ca
+      readOnly: true
+    - name: kafka-user
+      mountPath: /etc/kafka-certs/user
+      readOnly: true
+
+# -------------------- BACK: Kafka consumer -> Postgres writer ------------------
+back:
+  enabled: true
+  appName: sre-back
+  image:
+    repository: sre-back
+  ports:
+    http: 8082
+    management: 8081
+  ingress:
+    enabled: false               # consumer only, no public API
+  pdb:
+    enabled: true
+  env:
+    - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+      value: "sre-kafka-kafka-bootstrap:9093"
+    - name: SPRING_KAFKA_SECURITY_PROTOCOL
+      value: "SSL"
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_LOCATION
+      value: "file:/etc/kafka-certs/ca/ca.p12"
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_TYPE
+      value: "PKCS12"
+    - name: SPRING_KAFKA_SSL_KEY_STORE_LOCATION
+      value: "file:/etc/kafka-certs/user/user.p12"
+    - name: SPRING_KAFKA_SSL_KEY_STORE_TYPE
+      value: "PKCS12"
+    - name: SPRING_DATASOURCE_URL
+      value: "jdbc:postgresql://sre-postgres-rw:5432/appdb?sslmode=require"
+  envFromSecret:
+    - name: SPRING_DATASOURCE_USERNAME
+      secretName: sre-postgres-app
+      key: username
+    - name: SPRING_DATASOURCE_PASSWORD
+      secretName: sre-postgres-app
+      key: password
+    - name: SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD
+      secretName: sre-kafka-cluster-ca-cert
+      key: ca.password
+    - name: SPRING_KAFKA_SSL_KEY_STORE_PASSWORD
+      secretName: sre-app
+      key: user.password
+  extraVolumes:
+    - name: kafka-ca
+      secret: { secretName: sre-kafka-cluster-ca-cert }
+    - name: kafka-user
+      secret: { secretName: sre-app }
+  extraVolumeMounts:
+    - name: kafka-ca
+      mountPath: /etc/kafka-certs/ca
+      readOnly: true
+    - name: kafka-user
+      mountPath: /etc/kafka-certs/user
+      readOnly: true
+
+# -------------------- READER: Postgres -> REST read ---------------------------
+reader:
+  enabled: true
+  appName: sre-reader
+  image:
+    repository: sre-reader
+  ports:
+    http: 8084
+    management: 8081
+  ingress:
+    enabled: true
+    host: sre-reader.monlab.newt.cz
+  env:
+    - name: SPRING_DATASOURCE_URL
+      value: "jdbc:postgresql://sre-postgres-rw:5432/appdb?sslmode=require"
+  envFromSecret:
+    - name: SPRING_DATASOURCE_USERNAME
+      secretName: sre-postgres-app
+      key: username
+    - name: SPRING_DATASOURCE_PASSWORD
+      secretName: sre-postgres-app
+      key: password

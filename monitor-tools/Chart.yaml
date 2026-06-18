@@ -1,0 +1,9 @@
+apiVersion: v2
+name: monitor-tools
+description: >-
+  monitor-tools instance: ships the Postgres (CNPG), Kafka (Strimzi exporter +
+  broker) and JVM-app (grafana jvm-observ-lib mixin) dashboards and pushes them
+  into a dedicated Grafana folder via the Grafana HTTP API (run as a Helm hook Job).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

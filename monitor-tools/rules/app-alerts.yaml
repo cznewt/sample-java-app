@@ -1,0 +1,36 @@
+# Mimir ruler group (namespace: sre-challenge, tenant: anonymous)
+name: sre-apps
+interval: 30s
+rules:
+  - alert: SreAppDown
+    expr: up{job=~"sre-front|sre-back|sre-reader"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      team: sre
+    annotations:
+      summary: "SRE app {{ $labels.job }} is down"
+      description: "No successful scrape of {{ $labels.job }} (pod {{ $labels.pod }}) for 2 minutes."
+  - alert: SreAppHighErrorRate
+    expr: |
+      sum by (job) (rate(http_server_requests_seconds_count{namespace="sre-challenge",status=~"5.."}[5m]))
+        /
+      sum by (job) (rate(http_server_requests_seconds_count{namespace="sre-challenge"}[5m])) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      team: sre
+    annotations:
+      summary: "High 5xx error rate on {{ $labels.job }}"
+      description: "{{ $labels.job }} 5xx ratio is {{ $value | humanizePercentage }} over the last 5m."
+  - alert: SreAppHighLatencyP99
+    expr: |
+      histogram_quantile(0.99,
+        sum by (job, le) (rate(http_server_requests_seconds_bucket{namespace="sre-challenge"}[5m]))) > 1
+    for: 10m
+    labels:
+      severity: warning
+      team: sre
+    annotations:
+      summary: "p99 request latency > 1s on {{ $labels.job }}"
+      description: "{{ $labels.job }} p99 latency is {{ $value }}s over the last 5m."

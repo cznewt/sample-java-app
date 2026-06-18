@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/grafana/grafonnet.git",
+          "subdir": "gen/grafonnet-v11.0.0"
+        }
+      },
+      "version": "7380c9c64fb973f34c3ec46265621a2b0dee0058",
+      "sum": "0BvzR0i4bS4hc2O3xDv6i9m52z7mPrjvqxtcPrGhynA="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/grafana/grafonnet.git",
+          "subdir": "gen/grafonnet-v11.4.0"
+        }
+      },
+      "version": "7380c9c64fb973f34c3ec46265621a2b0dee0058",
+      "sum": "aVAX09paQYNOoCSKVpuk1exVIyBoMt/C50QJI+Q/3nA="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/grafana/jsonnet-libs.git",
+          "subdir": "common-lib"
+        }
+      },
+      "version": "31e47dee035b00326c8c35ab571e93ae7d756351",
+      "sum": "GhrW1n42GrYIh+O1mb5s7fEwvMWeiebA4hIPgnIRpLk="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/grafana/jsonnet-libs.git",
+          "subdir": "jvm-observ-lib"
+        }
+      },
+      "version": "31e47dee035b00326c8c35ab571e93ae7d756351",
+      "sum": "FM6cwUVu3MpY+QFkJ4GT2eEfjSZpSQYNrFk6ZFBlE0w="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/grafana/jsonnet-libs.git",
+          "subdir": "process-observ-lib"
+        }
+      },
+      "version": "31e47dee035b00326c8c35ab571e93ae7d756351",
+      "sum": "X8BoOAveyBql9ZUMUBpOFiS/V2h/vqspDrbl8FvWQd8="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/jsonnet-libs/docsonnet.git",
+          "subdir": "doc-util"
+        }
+      },
+      "version": "bf6f08ae02a51c48bdcec4629b1c1a5a62c6f803",
+      "sum": "BrAL/k23jq+xy9oA7TWIhUx07dsA/QLm3g7ktCwe//U="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/jsonnet-libs/xtd.git",
+          "subdir": ""
+        }
+      },
+      "version": "4d7f8cb24d613430799f9d56809cc6964f35cea9",
+      "sum": "hOrwkOx34tOXqoDVnwuI/Uf/dr9HFFSPWpDPOvnEGrk="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://github.com/yugui/jsonnetunit.git",
+          "subdir": "jsonnetunit"
+        }
+      },
+      "version": "6927c58cae7624a00f368b977ccc477d4f74071f",
+      "sum": "9FFqqln65hooRF0l6rjICDtnTxUlmDj34+sKMh4sjPI="
+    }
+  ],
+  "legacyImports": false
+}
