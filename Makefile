@@ -44,9 +44,10 @@ apps: ## deploy the three apps (umbrella chart)
 	$(KUBECTL) -n $(NS) rollout status deploy/sre-back   --timeout=180s
 	$(KUBECTL) -n $(NS) rollout status deploy/sre-reader --timeout=180s
 
-observability: ## stage dashboards+rules and deploy the monitor-tools instance
+observability: ## stage dashboards+rules and deploy monitor-tools (set GRAFANA_PASSWORD=...)
 	bash $(ROOT)/scripts/assemble-dashboards.sh
-	$(HELM) upgrade --install monitor-tools $(ROOT)/monitor-tools -n monitor-tools --create-namespace
+	$(HELM) upgrade --install monitor-tools $(ROOT)/monitor-tools -n monitor-tools --create-namespace \
+	  $(if $(GRAFANA_PASSWORD),--set grafana.password=$(GRAFANA_PASSWORD))
 
 mixin: ## (optional) re-render the JVM mixin from grafana jvm-observ-lib (needs docker)
 	@echo "See observability/mixin/README.md for the containerised jsonnet render."
