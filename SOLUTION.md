@@ -82,9 +82,9 @@ automatically. Per-service config lives under `front:`/`back:`/`reader:`; `globa
 * **JVM mixin** — the **grafana `jvm-observ-lib`** jsonnet library is rendered (metric source
   `java_micrometer`, selector `job=~"sre-.*"`) into a 30-panel **JVM** dashboard plus JVM alert rules.
 * **monitor-tools instance** — a small Helm release whose post-install/upgrade **hook Job** pushes
-  the dashboards into dedicated Grafana folders — **Kafka**, **PostgreSQL**, **Java apps** — and loads
-  the alert rule groups into the **Mimir ruler** (→ Alertmanager). Idempotent, hardened non-root,
-  no external dependencies.
+  the dashboards into a **single Grafana folder for the assignment** ("SRE Challenge — Boerse"),
+  split into nested **Kafka** / **PostgreSQL** / **Java apps** subfolders, and loads the alert rule
+  groups into the **Mimir ruler** (→ Alertmanager). Idempotent, hardened non-root, no external deps.
 * **Alerts** — app (down / 5xx / p99 latency), JVM (heap / deadlock), Kafka (consumer lag / no
   brokers / exporter down), Postgres (cluster down / connections).
 
